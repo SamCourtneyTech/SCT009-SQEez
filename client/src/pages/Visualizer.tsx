@@ -12,8 +12,6 @@ export default function Visualizer() {
   const [frequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panOffset, setPanOffset] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -39,18 +37,6 @@ export default function Visualizer() {
     }
   };
 
-  const handlePanLeft = () => {
-    setPanOffset((prev) => Math.max(prev - 0.1, 0));
-  };
-
-  const handlePanRight = () => {
-    setPanOffset((prev) => Math.min(prev + 0.1, 1));
-  };
-
-  const handleResetView = () => {
-    setZoomLevel(1);
-    setPanOffset(0);
-  };
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -208,18 +194,12 @@ export default function Visualizer() {
             hardwareMaxRate={hardwareMaxRate}
             waveformType={waveformType}
             audioBuffer={audioBuffer}
-            zoomLevel={zoomLevel}
-            panOffset={panOffset}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
             onWaveformTypeChange={setWaveformType}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
             onFileUpload={handleFileUpload}
             onClearAudio={() => setAudioBuffer(null)}
-            onZoomChange={setZoomLevel}
-            onPanLeft={handlePanLeft}
-            onPanRight={handlePanRight}
-            onResetView={handleResetView}
           />
         </aside>
 
@@ -228,7 +208,7 @@ export default function Visualizer() {
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                  Original Waveform + Sample Points
+                  Waveform Shape
                 </h2>
               </div>
               <Card className="flex-1 p-2 bg-card min-h-0" data-testid="card-original-waveform">
@@ -238,8 +218,6 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
-                  zoomLevel={zoomLevel}
-                  panOffset={panOffset}
                   type="original"
                   className="w-full h-full"
                 />
@@ -259,8 +237,6 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
-                  zoomLevel={zoomLevel}
-                  panOffset={panOffset}
                   type="quantized"
                   className="w-full h-full"
                 />
@@ -280,8 +256,6 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
-                  zoomLevel={zoomLevel}
-                  panOffset={panOffset}
                   type="binary"
                   className="w-full h-full"
                 />

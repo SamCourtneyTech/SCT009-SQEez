@@ -1,4 +1,4 @@
-import { Play, Pause, Info, AlertTriangle, Upload, X, ChevronLeft, ChevronRight, RotateCcw, ZoomIn } from 'lucide-react';
+import { Play, Pause, Info, AlertTriangle, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,18 +14,12 @@ interface ControlPanelProps {
   hardwareMaxRate: number;
   waveformType: WaveformType;
   audioBuffer: AudioBuffer | null;
-  zoomLevel: number;
-  panOffset: number;
   onSampleRateChange: (value: number) => void;
   onBitDepthChange: (value: number) => void;
   onWaveformTypeChange: (value: WaveformType) => void;
   onPlayPauseToggle: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onClearAudio: () => void;
-  onZoomChange: (value: number) => void;
-  onPanLeft: () => void;
-  onPanRight: () => void;
-  onResetView: () => void;
 }
 
 export function ControlPanel({
@@ -35,18 +29,12 @@ export function ControlPanel({
   hardwareMaxRate,
   waveformType,
   audioBuffer,
-  zoomLevel,
-  panOffset,
   onSampleRateChange,
   onBitDepthChange,
   onWaveformTypeChange,
   onPlayPauseToggle,
   onFileUpload,
   onClearAudio,
-  onZoomChange,
-  onPanLeft,
-  onPanRight,
-  onResetView,
 }: ControlPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const quantizationLevels = Math.pow(2, bitDepth);
@@ -231,95 +219,6 @@ export function ControlPanel({
               </Button>
             </div>
           )}
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-foreground">
-              Zoom Level
-            </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="w-3 h-3 text-muted-foreground" data-testid="info-zoom" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-xs">
-                  Zoom in to see more detail in the waveform. Higher zoom shows a smaller time window.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <div className="space-y-2">
-            <Slider
-              min={1}
-              max={100}
-              step={1}
-              value={[zoomLevel]}
-              onValueChange={(values) => onZoomChange(values[0])}
-              className="w-full"
-              data-testid="slider-zoom"
-            />
-            <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
-              <span>1x</span>
-              <span className="font-mono tabular-nums" data-testid="text-zoom-value">
-                {zoomLevel.toFixed(1)}x
-              </span>
-              <span>100x</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-foreground">
-              Pan Controls
-            </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="w-3 h-3 text-muted-foreground" data-testid="info-pan" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-xs">
-                  Navigate through the zoomed waveform using pan controls.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="default"
-              onClick={onPanLeft}
-              disabled={panOffset <= 0 || zoomLevel <= 1}
-              className="flex-1"
-              data-testid="button-pan-left"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Pan Left
-            </Button>
-            <Button
-              variant="outline"
-              size="default"
-              onClick={onPanRight}
-              disabled={panOffset >= 1 || zoomLevel <= 1}
-              className="flex-1"
-              data-testid="button-pan-right"
-            >
-              Pan Right
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-          <Button
-            variant="secondary"
-            size="default"
-            onClick={onResetView}
-            disabled={zoomLevel === 1 && panOffset === 0}
-            className="w-full"
-            data-testid="button-reset-view"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset View
-          </Button>
         </div>
 
         <Card className="p-4 space-y-3 bg-card">

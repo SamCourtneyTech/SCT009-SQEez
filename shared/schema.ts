@@ -28,7 +28,7 @@ export type AudioSettingsType = z.infer<typeof audioSettingsSchema>;
 
 export function generateWaveform(t: number, frequency: number, type: WaveformType): number {
   const phase = 2 * Math.PI * frequency * t;
-  
+
   switch (type) {
     case 'sine':
       return Math.sin(phase);
@@ -41,4 +41,27 @@ export function generateWaveform(t: number, frequency: number, type: WaveformTyp
     default:
       return Math.sin(phase);
   }
+}
+
+export function generateStaticWaveformPath(type: WaveformType, width: number, height: number, periods: number = 2): string {
+  const centerY = height / 2;
+  const amplitude = height * 0.35;
+  const points: string[] = [];
+
+  const samplesPerPeriod = 100;
+  const totalSamples = samplesPerPeriod * periods;
+
+  for (let i = 0; i <= totalSamples; i++) {
+    const x = (i / totalSamples) * width;
+    const t = (i / samplesPerPeriod);
+    const y = centerY - generateWaveform(t, 1, type) * amplitude;
+
+    if (i === 0) {
+      points.push(`M ${x} ${y}`);
+    } else {
+      points.push(`L ${x} ${y}`);
+    }
+  }
+
+  return points.join(' ');
 }

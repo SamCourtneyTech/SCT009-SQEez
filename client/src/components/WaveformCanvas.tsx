@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { WaveformType, generateWaveform } from '@shared/schema';
+import { WaveformType, generateWaveform, generateStaticWaveformPath } from '@shared/schema';
 
 interface WaveformCanvasProps {
   sampleRate: number;
@@ -7,16 +7,50 @@ interface WaveformCanvasProps {
   frequency: number;
   waveformType: WaveformType;
   audioBuffer?: AudioBuffer | null;
-  zoomLevel?: number;
-  panOffset?: number;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, panOffset = 0, className, type }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, className, type }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const animationRef = useRef<number>();
   const scrollOffsetRef = useRef(0);
+
+  // For the 'original' type, we show a static SVG image
+  if (type === 'original') {
+    return (
+      <div className={className} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg
+          ref={svgRef}
+          viewBox="0 0 800 300"
+          className="w-full h-full"
+          preserveAspectRatio="xMidYMid meet"
+          aria-label="Static waveform visualization showing 2 periods"
+          data-testid="svg-static-waveform"
+        >
+          <line x1="0" y1="150" x2="800" y2="150" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="4 4" />
+          <path
+            d={generateStaticWaveformPath(waveformType, 800, 300, 2)}
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <text
+            x="10"
+            y="20"
+            fill="hsl(var(--muted-foreground))"
+            fontSize="14"
+            fontFamily="var(--font-sans)"
+          >
+            {waveformType.charAt(0).toUpperCase() + waveformType.slice(1)} Wave (2 periods)
+          </text>
+        </svg>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,7 +61,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    
+
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
@@ -41,14 +75,12 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     const stepSize = (height * 0.7) / quantizationLevels;
 
     const baseDuration = Math.max(0.5, Math.min(5, 1000 / sampleRate));
-    const displayDuration = baseDuration / zoomLevel;
+    const displayDuration = baseDuration;
     const totalSamples = Math.max(2, Math.floor(sampleRate * displayDuration));
     const maxDisplaySamples = 500;
     const samplesInView = Math.min(totalSamples, maxDisplaySamples);
     const sampleSpacing = width / samplesInView;
     const sampleStride = Math.max(1, Math.floor(totalSamples / maxDisplaySamples));
-    
-    const timeOffset = panOffset * (baseDuration - displayDuration);
 
     const getSampleValue = (t: number): number => {
       if (audioBuffer) {
@@ -64,12 +96,12 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       ctx.strokeStyle = 'hsl(var(--border))';
       ctx.lineWidth = 0.5;
       ctx.setLineDash([2, 4]);
-      
+
       ctx.beginPath();
       ctx.moveTo(0, centerY);
       ctx.lineTo(width, centerY);
       ctx.stroke();
-      
+
       if (type === 'quantized') {
         for (let i = 0; i < quantizationLevels; i++) {
           const y = height * 0.15 + i * stepSize;
@@ -79,61 +111,8 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
           ctx.stroke();
         }
       }
-      
+
       ctx.setLineDash([]);
-    };
-
-    const drawOriginalWaveform = (time: number) => {
-      ctx.fillStyle = 'hsl(var(--background))';
-      ctx.fillRect(0, 0, width, height);
-
-      drawGrid();
-
-      ctx.strokeStyle = 'hsl(var(--primary))';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      const points: { x: number; y: number }[] = [];
-      
-      for (let x = 0; x < width; x++) {
-        const t = (x / width) * displayDuration + time + timeOffset;
-        const y = centerY + getSampleValue(t) * amplitude;
-        
-        if (x === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = 'hsl(var(--primary))';
-      ctx.strokeStyle = 'hsl(var(--primary-foreground))';
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i < samplesInView; i++) {
-        const x = i * sampleSpacing;
-        const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
-        const sampleValue = getSampleValue(t);
-        const y = centerY + sampleValue * amplitude;
-
-        if (samplesInView <= 100) {
-          ctx.setLineDash([2, 2]);
-          ctx.strokeStyle = 'hsl(var(--muted-foreground))';
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(2, 4 * Math.min(1, 100 / samplesInView)), 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.strokeStyle = 'hsl(var(--background))';
-        ctx.stroke();
-      }
     };
 
     const drawQuantizedWaveform = (time: number) => {
@@ -156,7 +135,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
+        const t = (sampleIndex / totalSamples) * displayDuration + time;
         const sampleValue = getSampleValue(t);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
@@ -179,7 +158,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
+        const t = (sampleIndex / totalSamples) * displayDuration + time;
         const sampleValue = getSampleValue(t);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
@@ -241,9 +220,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     const animate = () => {
       const time = Date.now() / 1000;
 
-      if (type === 'original') {
-        drawOriginalWaveform(time);
-      } else if (type === 'quantized') {
+      if (type === 'quantized') {
         drawQuantizedWaveform(time);
       } else if (type === 'binary') {
         drawBinaryEncoding(time);
@@ -259,7 +236,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel, panOffset, type]);
+  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, type]);
 
   return (
     <canvas
