@@ -11,10 +11,31 @@ export default function Visualizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
+  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const tempCtx = new AudioContextClass();
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+      setAudioBuffer(decodedBuffer);
+      setIsPlaying(false);
+    } catch (error) {
+      console.error('Error decoding audio file:', error);
+      alert('Failed to load audio file. Please try a different file.');
+    } finally {
+      tempCtx.close();
+    }
+  };
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -46,11 +67,6 @@ export default function Visualizer() {
     audioContextRef.current = ctx;
 
     const actualContextRate = ctx.sampleRate;
-
-    const oscillator = ctx.createOscillator();
-    oscillator.frequency.value = frequency;
-    oscillator.type = waveformType;
-
     const gainNode = ctx.createGain();
     gainNode.gain.value = 0.3;
 
@@ -87,18 +103,33 @@ export default function Visualizer() {
       }
     };
 
-    oscillator.connect(crusher);
+    let sourceNode: AudioScheduledSourceNode;
+
+    if (audioBuffer) {
+      const bufferSource = ctx.createBufferSource();
+      bufferSource.buffer = audioBuffer;
+      bufferSource.loop = true;
+      bufferSource.connect(crusher);
+      bufferSource.start();
+      sourceNode = bufferSource;
+    } else {
+      const oscillator = ctx.createOscillator();
+      oscillator.frequency.value = frequency;
+      oscillator.type = waveformType;
+      oscillator.connect(crusher);
+      oscillator.start();
+      sourceNode = oscillator;
+      oscillatorRef.current = oscillator;
+    }
+
     crusher.connect(gainNode);
     gainNode.connect(ctx.destination);
-
-    oscillator.start();
-    oscillatorRef.current = oscillator;
     gainNodeRef.current = gainNode;
 
     return () => {
       try {
-        if (oscillator) {
-          oscillator.stop();
+        if (sourceNode) {
+          sourceNode.stop();
         }
       } catch (e) {
       }
@@ -115,7 +146,7 @@ export default function Visualizer() {
       
       audioContextRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, frequency, waveformType, hardwareMaxRate]);
+  }, [isPlaying, sampleRate, bitDepth, frequency, waveformType, hardwareMaxRate, audioBuffer]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
@@ -161,10 +192,13 @@ export default function Visualizer() {
             isPlaying={isPlaying}
             hardwareMaxRate={hardwareMaxRate}
             waveformType={waveformType}
+            audioBuffer={audioBuffer}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
             onWaveformTypeChange={setWaveformType}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
+            onFileUpload={handleFileUpload}
+            onClearAudio={() => setAudioBuffer(null)}
           />
         </aside>
 
@@ -182,6 +216,7 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
+                  audioBuffer={audioBuffer}
                   type="original"
                   className="w-full h-full"
                 />
@@ -200,6 +235,7 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
+                  audioBuffer={audioBuffer}
                   type="quantized"
                   className="w-full h-full"
                 />
@@ -218,6 +254,7 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
+                  audioBuffer={audioBuffer}
                   type="binary"
                   className="w-full h-full"
                 />
