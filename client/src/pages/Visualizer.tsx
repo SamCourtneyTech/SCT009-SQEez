@@ -67,12 +67,14 @@ export default function Visualizer() {
 
   // Update oscillator waveform type when it changes (requires restart)
   useEffect(() => {
-    if (!isPlaying || sampleRate > hardwareMaxRate) {
+    if (!isPlaying) {
       return;
     }
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    const requestedRate = Math.max(0.1, Math.min(hardwareMaxRate, sampleRate));
+    // Clamp sample rate to valid AudioContext range (3000-768000 Hz) and hardware max
+    // For playback, cap at hardware limit (48kHz) even if visualization uses higher rate
+    const requestedRate = Math.max(3000, Math.min(hardwareMaxRate, sampleRate));
     const ctx = new AudioContextClass({ sampleRate: requestedRate });
     audioContextRef.current = ctx;
 

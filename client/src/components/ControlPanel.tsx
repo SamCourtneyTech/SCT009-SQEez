@@ -99,16 +99,16 @@ export function ControlPanel({
           <Slider
             value={[sampleRate]}
             onValueChange={([value]) => onSampleRateChange(value)}
-            min={0.1}
-            max={88200}
-            step={0.1}
+            min={10}
+            max={96000}
+            step={10}
             className="w-full"
             aria-label="Sample rate in Hertz"
             data-testid="slider-sample-rate"
           />
           <div className="flex justify-between text-xs text-muted-foreground font-medium">
-            <span>0.1 Hz</span>
-            <span>88.2 kHz</span>
+            <span>10 Hz</span>
+            <span>96 kHz</span>
           </div>
           {sampleRate > hardwareMaxRate && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
