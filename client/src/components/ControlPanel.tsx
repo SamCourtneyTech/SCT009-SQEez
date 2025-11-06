@@ -1,4 +1,4 @@
-import { Play, Pause, Info, AlertTriangle, Upload, X, ChevronLeft, ChevronRight, RotateCcw, ZoomIn } from 'lucide-react';
+import { Play, Pause, Info, AlertTriangle, Upload, X, ChevronLeft, ChevronRight, RotateCcw, ZoomIn, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -16,6 +16,7 @@ interface ControlPanelProps {
   audioBuffer: AudioBuffer | null;
   zoomLevel: number;
   panOffset: number;
+  showSpectrum: boolean;
   onSampleRateChange: (value: number) => void;
   onBitDepthChange: (value: number) => void;
   onWaveformTypeChange: (value: WaveformType) => void;
@@ -26,6 +27,7 @@ interface ControlPanelProps {
   onPanLeft: () => void;
   onPanRight: () => void;
   onResetView: () => void;
+  onShowSpectrumToggle: () => void;
 }
 
 export function ControlPanel({
@@ -37,6 +39,7 @@ export function ControlPanel({
   audioBuffer,
   zoomLevel,
   panOffset,
+  showSpectrum,
   onSampleRateChange,
   onBitDepthChange,
   onWaveformTypeChange,
@@ -47,6 +50,7 @@ export function ControlPanel({
   onPanLeft,
   onPanRight,
   onResetView,
+  onShowSpectrumToggle,
 }: ControlPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const quantizationLevels = Math.pow(2, bitDepth);
@@ -320,6 +324,29 @@ export function ControlPanel({
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset View
           </Button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wide text-foreground">
+              Frequency Analysis
+            </label>
+          </div>
+          <Button
+            variant={showSpectrum ? "default" : "outline"}
+            size="default"
+            onClick={onShowSpectrumToggle}
+            className="w-full"
+            data-testid="button-toggle-spectrum"
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            {showSpectrum ? 'Hide Spectrum' : 'Show Spectrum'}
+          </Button>
+          {showSpectrum && (
+            <p className="text-xs text-muted-foreground">
+              FFT analysis shows frequency content, Nyquist limit, and aliasing region.
+            </p>
+          )}
         </div>
 
         <Card className="p-4 space-y-3 bg-card">
