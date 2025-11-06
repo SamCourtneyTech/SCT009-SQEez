@@ -12,6 +12,8 @@ export default function Visualizer() {
   const [frequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -35,6 +37,19 @@ export default function Visualizer() {
     } finally {
       tempCtx.close();
     }
+  };
+
+  const handlePanLeft = () => {
+    setPanOffset((prev) => Math.max(prev - 0.1, 0));
+  };
+
+  const handlePanRight = () => {
+    setPanOffset((prev) => Math.min(prev + 0.1, 1));
+  };
+
+  const handleResetView = () => {
+    setZoomLevel(1);
+    setPanOffset(0);
   };
 
   useEffect(() => {
@@ -193,12 +208,18 @@ export default function Visualizer() {
             hardwareMaxRate={hardwareMaxRate}
             waveformType={waveformType}
             audioBuffer={audioBuffer}
+            zoomLevel={zoomLevel}
+            panOffset={panOffset}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
             onWaveformTypeChange={setWaveformType}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
             onFileUpload={handleFileUpload}
             onClearAudio={() => setAudioBuffer(null)}
+            onZoomChange={setZoomLevel}
+            onPanLeft={handlePanLeft}
+            onPanRight={handlePanRight}
+            onResetView={handleResetView}
           />
         </aside>
 
@@ -217,6 +238,8 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  zoomLevel={zoomLevel}
+                  panOffset={panOffset}
                   type="original"
                   className="w-full h-full"
                 />
@@ -236,6 +259,8 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  zoomLevel={zoomLevel}
+                  panOffset={panOffset}
                   type="quantized"
                   className="w-full h-full"
                 />
@@ -255,6 +280,8 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  zoomLevel={zoomLevel}
+                  panOffset={panOffset}
                   type="binary"
                   className="w-full h-full"
                 />

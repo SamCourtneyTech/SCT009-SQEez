@@ -7,11 +7,13 @@ interface WaveformCanvasProps {
   frequency: number;
   waveformType: WaveformType;
   audioBuffer?: AudioBuffer | null;
+  zoomLevel?: number;
+  panOffset?: number;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, className, type }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, panOffset = 0, className, type }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const scrollOffsetRef = useRef(0);
@@ -38,12 +40,15 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     const quantizationLevels = Math.pow(2, bitDepth);
     const stepSize = (height * 0.7) / quantizationLevels;
 
-    const displayDuration = Math.max(0.5, Math.min(5, 1000 / sampleRate));
+    const baseDuration = Math.max(0.5, Math.min(5, 1000 / sampleRate));
+    const displayDuration = baseDuration / zoomLevel;
     const totalSamples = Math.max(2, Math.floor(sampleRate * displayDuration));
     const maxDisplaySamples = 500;
     const samplesInView = Math.min(totalSamples, maxDisplaySamples);
     const sampleSpacing = width / samplesInView;
     const sampleStride = Math.max(1, Math.floor(totalSamples / maxDisplaySamples));
+    
+    const timeOffset = panOffset * (baseDuration - displayDuration);
 
     const getSampleValue = (t: number): number => {
       if (audioBuffer) {
@@ -91,7 +96,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       const points: { x: number; y: number }[] = [];
       
       for (let x = 0; x < width; x++) {
-        const t = (x / width) * displayDuration + time;
+        const t = (x / width) * displayDuration + time + timeOffset;
         const y = centerY + getSampleValue(t) * amplitude;
         
         if (x === 0) {
@@ -109,7 +114,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time;
+        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
         const sampleValue = getSampleValue(t);
         const y = centerY + sampleValue * amplitude;
 
@@ -151,7 +156,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time;
+        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
         const sampleValue = getSampleValue(t);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
@@ -174,7 +179,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time;
+        const t = (sampleIndex / totalSamples) * displayDuration + time + timeOffset;
         const sampleValue = getSampleValue(t);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
@@ -254,7 +259,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, type]);
+  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel, panOffset, type]);
 
   return (
     <canvas
