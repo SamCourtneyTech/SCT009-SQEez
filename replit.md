@@ -12,17 +12,35 @@ Educational tool for understanding:
 - The relationship between bit depth and quantization levels
 
 ## Current State
-**Phase**: Initial Development - Frontend Complete
+**Phase**: Feature Development - Core Features Complete
 - ✅ Schema and TypeScript interfaces defined
 - ✅ All React components built with exceptional visual design
 - ✅ Three canvas-based visualizations implemented
 - ✅ Interactive control panel with sliders for sample rate and bit depth
 - ✅ Real-time audio playback with Web Audio API
-- ✅ Performance optimizations: requestAnimationFrame, canvas rendering
+- ✅ Performance optimizations: requestAnimationFrame, canvas rendering, display downsampling
+- ✅ Waveform selection (sine, square, triangle, sawtooth)
+- ✅ Custom audio file upload and playback
+- ✅ Zoom and pan controls for detailed inspection
 - ⏳ Backend (minimal - primarily frontend app)
-- ⏳ Final integration and testing
+- ⏳ Additional features (spectrum analyzer, comparison mode, export)
 
 ## Recent Changes
+- **2025-11-06**: Waveform selection and custom audio upload
+  - Added waveform type selector with 4 waveform types (sine, square, triangle, sawtooth)
+  - Implemented custom audio file upload with Web Audio API decoding
+  - Created getSampleValue() helper to read from audio buffer or generate waveform
+  - Audio playback switches between BufferSourceNode (custom) and OscillatorNode (generated)
+  - Proper client-only AudioBuffer state management
+
+- **2025-11-06**: Zoom and pan controls
+  - Implemented zoom slider (1x to 100x magnification)
+  - Added pan left/right buttons with 10% step increments
+  - Created reset view button to restore default zoom/pan
+  - Modified canvas rendering with zoom-dependent display duration
+  - Synchronized zoom/pan across all three visualizations
+  - Proper pan offset range (0-1) with zoom scaling in timeOffset calculation
+
 - **2025-11-05**: Initial project setup
   - Created schema definitions for audio settings and quantization info
   - Built WaveformCanvas component with three visualization modes
@@ -32,38 +50,53 @@ Educational tool for understanding:
 
 ## Features
 
-### MVP Features (In Progress)
+### Implemented Features
 1. **Interactive Waveform Display**
    - Adjustable sample rate from 0.1 Hz to 88.2 kHz
-   - Visual sample points overlaid on continuous sine wave
+   - Visual sample points overlaid on continuous waveform
    - Vertical slice indicators showing sampling moments
+   - Zoom: 1x to 100x magnification for detailed inspection
+   - Pan: Navigate through zoomed view with left/right controls
 
-2. **Quantization Visualization**
+2. **Waveform Selection**
+   - Sine wave (smooth sinusoidal)
+   - Square wave (alternating high/low with sharp transitions)
+   - Triangle wave (linear ramps up and down)
+   - Sawtooth wave (linear ramp up, sharp drop)
+   - Custom audio file upload (WAV, MP3, etc.)
+
+3. **Quantization Visualization**
    - Bit depth control from 1-bit to 32-bit
    - Stepped waveform showing quantization levels
    - Visual representation of discrete levels
+   - Real-time quantization error demonstration
 
-3. **Binary Encoding Display**
+4. **Binary Encoding Display**
    - Real-time scrolling binary values
    - Color-coded by quantization value
    - Smooth animation showing encoding stream
+   - Adapts to bit depth (1-32 bits)
 
-4. **Audio Playback**
+5. **Audio Playback**
    - Play/pause control for hearing quantized audio
    - Web Audio API implementation
+   - ScriptProcessorNode for real-time quantization
+   - Works with both generated and uploaded audio
    - No anti-aliasing filters (educational demonstration)
 
-5. **Calculated Metrics**
+6. **Calculated Metrics**
    - Quantization levels (2^n)
-   - Nyquist frequency
-   - Data rate estimation
+   - Nyquist frequency (sampleRate / 2)
+   - Data rate estimation (bytes per second)
 
 ### Technical Features
 - Canvas-based rendering for 60fps performance
 - requestAnimationFrame for smooth animations
+- Display downsampling (max 500 samples/frame for performance)
 - Responsive layout (desktop/tablet/mobile)
 - Keyboard shortcuts (Space for play/pause)
-- Accessibility features (ARIA labels, tooltips)
+- Accessibility features (ARIA labels, tooltips, data-testid attributes)
+- Synchronized visualizations across zoom/pan operations
 
 ## Project Architecture
 
@@ -77,11 +110,14 @@ Educational tool for understanding:
 
 ### Data Model
 ```typescript
+type WaveformType = 'sine' | 'square' | 'triangle' | 'sawtooth';
+
 interface AudioSettings {
-  sampleRate: number;    // 0.1 Hz to 88.2 kHz
-  bitDepth: number;      // 1-bit to 32-bit
-  frequency: number;     // Audio frequency (440 Hz default)
-  isPlaying: boolean;    // Playback state
+  sampleRate: number;      // 0.1 Hz to 88.2 kHz
+  bitDepth: number;        // 1-bit to 32-bit
+  frequency: number;       // Audio frequency (440 Hz default)
+  isPlaying: boolean;      // Playback state
+  waveformType: WaveformType;  // Selected waveform shape
 }
 
 interface QuantizationInfo {
@@ -89,6 +125,11 @@ interface QuantizationInfo {
   nyquistFrequency: number;   // sampleRate / 2
   estimatedSize: number;      // bytes per second
 }
+
+// Client-only state (not in shared schema):
+// - audioBuffer: AudioBuffer | null  // Uploaded custom audio
+// - zoomLevel: number (1-100)        // Magnification level
+// - panOffset: number (0-1)          // Pan position (normalized)
 ```
 
 ### Component Structure
@@ -96,14 +137,18 @@ interface QuantizationInfo {
 Visualizer (Main Page)
 ├── Header Bar (title, stats)
 ├── Control Panel (sidebar)
-│   ├── Sample Rate Slider
-│   ├── Bit Depth Slider
+│   ├── Sample Rate Slider (0.1 Hz - 88.2 kHz)
+│   ├── Bit Depth Slider (1-32 bits)
+│   ├── Waveform Type Selector (dropdown)
+│   ├── Custom Audio Upload (file input)
+│   ├── Zoom Slider (1x - 100x)
+│   ├── Pan Controls (left/right buttons + reset)
 │   ├── Calculated Metrics Card
 │   └── Play/Pause Button
 └── Visualization Area
-    ├── Original Waveform Canvas
-    ├── Quantized Waveform Canvas
-    └── Binary Encoding Canvas
+    ├── Original Waveform Canvas (with sample points)
+    ├── Quantized Waveform Canvas (with step levels)
+    └── Binary Encoding Canvas (scrolling binary stream)
 ```
 
 ### Key Files
@@ -153,11 +198,15 @@ Visualizer (Main Page)
 - requestAnimationFrame support
 - Modern JavaScript features (ES2020+)
 
-## Future Enhancements (Post-MVP)
-- Waveform selection (sine, square, triangle, sawtooth)
-- Custom audio file upload
-- Zoom and pan controls for detailed inspection
-- Frequency spectrum analyzer
-- Side-by-side comparison mode
-- Export functionality for audio and visualizations
-- More advanced DSP concepts (filtering, modulation)
+## Completed Post-MVP Features
+- ✅ Waveform selection (sine, square, triangle, sawtooth)
+- ✅ Custom audio file upload with Web Audio API decoding
+- ✅ Zoom and pan controls for detailed waveform inspection (1x-100x, pan with buttons)
+
+## Planned Future Enhancements
+- ⏳ Frequency spectrum analyzer with FFT
+- ⏳ Side-by-side comparison mode (original vs quantized)
+- ⏳ Export functionality (audio as WAV, visualizations as PNG)
+- 🔮 More advanced DSP concepts (filtering, modulation, convolution)
+- 🔮 Real-time input from microphone
+- 🔮 Multiple waveform layers/mixing
