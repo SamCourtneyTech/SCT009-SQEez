@@ -7,48 +7,153 @@ interface WaveformCanvasProps {
   frequency: number;
   waveformType: WaveformType;
   audioBuffer?: AudioBuffer | null;
+  zoomLevel?: number;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, className, type }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, className, type }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const animationRef = useRef<number>();
   const scrollOffsetRef = useRef(0);
 
-  // For the 'original' type, we show a static SVG image
+  // For the 'original' type, we show a waveform with sample markers
+  useEffect(() => {
+    if (type !== 'original') return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
+
+    const drawWaveform = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const width = rect.width;
+      const height = rect.height;
+      const centerY = height / 2;
+      const amplitude = height * 0.35;
+
+      // Clear canvas with computed background color
+      const computedStyle = getComputedStyle(canvas);
+      const bgColor = computedStyle.getPropertyValue('--background');
+      ctx.fillStyle = bgColor ? `hsl(${bgColor})` : '#000000';
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw center line
+      const borderColor = computedStyle.getPropertyValue('--border');
+      ctx.strokeStyle = borderColor ? `hsl(${borderColor})` : '#555555';
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Display exactly 1 second of the waveform
+      const displayDuration = 1.0; // 1 second
+      const timePerPixel = (displayDuration / zoomLevel) / width;
+
+      // Draw the waveform
+      const primaryColor = computedStyle.getPropertyValue('--primary');
+      ctx.strokeStyle = primaryColor ? `hsl(${primaryColor})` : '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      for (let x = 0; x < width; x++) {
+        const t = x * timePerPixel;
+        const value = generateWaveform(t, frequency, waveformType);
+        const y = centerY - value * amplitude;
+
+        if (x === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+
+      // Draw sample markers
+      const sampleInterval = 1 / sampleRate; // Time between samples in seconds
+      const pixelsPerSample = sampleInterval / timePerPixel;
+
+      // Only draw sample markers if they're visible (not too close together)
+      if (pixelsPerSample >= 2) {
+        const chart2Color = computedStyle.getPropertyValue('--chart-2');
+        ctx.strokeStyle = chart2Color ? `hsl(${chart2Color})` : '#10b981';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = Math.min(1, pixelsPerSample / 10);
+
+        for (let sampleIndex = 0; sampleIndex * sampleInterval <= displayDuration / zoomLevel; sampleIndex++) {
+          const t = sampleIndex * sampleInterval;
+          const x = t / timePerPixel;
+
+          if (x > width) break;
+
+          // Draw vertical line at sample point
+          ctx.beginPath();
+          ctx.moveTo(x, centerY - amplitude);
+          ctx.lineTo(x, centerY + amplitude);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw label
+      const mutedFgColor = computedStyle.getPropertyValue('--muted-foreground');
+      ctx.fillStyle = mutedFgColor ? `hsl(${mutedFgColor})` : '#888888';
+      ctx.font = '12px var(--font-sans)';
+      ctx.fillText(
+        `${waveformType.charAt(0).toUpperCase() + waveformType.slice(1)} Wave @ ${frequency} Hz (${(displayDuration / zoomLevel).toFixed(3)}s view)`,
+        8,
+        20
+      );
+
+      // Draw sample info if markers are visible
+      if (pixelsPerSample >= 2) {
+        ctx.fillText(
+          `Sample markers: ${sampleRate} Hz (${(sampleInterval * 1000).toFixed(4)} ms)`,
+          8,
+          height - 8
+        );
+      } else {
+        ctx.fillText(
+          `Zoom in to see sample markers (${sampleRate} Hz)`,
+          8,
+          height - 8
+        );
+      }
+    };
+
+    drawWaveform();
+
+    // Also redraw on window resize
+    const handleResize = () => drawWaveform();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+
+  }, [type, sampleRate, frequency, waveformType, zoomLevel]);
+
   if (type === 'original') {
     return (
-      <div className={className} style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg
-          ref={svgRef}
-          viewBox="0 0 800 300"
-          className="w-full h-full"
-          preserveAspectRatio="xMidYMid meet"
-          aria-label="Static waveform visualization showing 2 periods"
-          data-testid="svg-static-waveform"
-        >
-          <line x1="0" y1="150" x2="800" y2="150" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="4 4" />
-          <path
-            d={generateStaticWaveformPath(waveformType, 800, 300, 2)}
-            fill="none"
-            stroke="hsl(var(--primary))"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <text
-            x="10"
-            y="20"
-            fill="hsl(var(--muted-foreground))"
-            fontSize="14"
-            fontFamily="var(--font-sans)"
-          >
-            {waveformType.charAt(0).toUpperCase() + waveformType.slice(1)} Wave (2 periods)
-          </text>
-        </svg>
-      </div>
+      <canvas
+        ref={canvasRef}
+        className={className}
+        aria-label="Waveform visualization with sample markers"
+        data-testid="canvas-original-waveform"
+        style={{ width: '100%', height: '100%' }}
+      />
     );
   }
 

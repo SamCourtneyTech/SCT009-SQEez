@@ -14,9 +14,13 @@ interface ControlPanelProps {
   hardwareMaxRate: number;
   waveformType: WaveformType;
   audioBuffer: AudioBuffer | null;
+  frequency: number;
+  zoomLevel: number;
   onSampleRateChange: (value: number) => void;
   onBitDepthChange: (value: number) => void;
   onWaveformTypeChange: (value: WaveformType) => void;
+  onFrequencyChange: (value: number) => void;
+  onZoomLevelChange: (value: number) => void;
   onPlayPauseToggle: () => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onClearAudio: () => void;
@@ -29,9 +33,13 @@ export function ControlPanel({
   hardwareMaxRate,
   waveformType,
   audioBuffer,
+  frequency,
+  zoomLevel,
   onSampleRateChange,
   onBitDepthChange,
   onWaveformTypeChange,
+  onFrequencyChange,
+  onZoomLevelChange,
   onPlayPauseToggle,
   onFileUpload,
   onClearAudio,
@@ -47,10 +55,17 @@ export function ControlPanel({
     return `${rate.toFixed(1)} Hz`;
   };
 
+  const formatFrequency = (freq: number) => {
+    if (freq >= 1000) {
+      return `${(freq / 1000).toFixed(2)} kHz`;
+    }
+    return `${freq.toFixed(1)} Hz`;
+  };
+
   const formatFileSize = () => {
     const bytesPerSample = Math.ceil(bitDepth / 8);
     const bytesPerSecond = sampleRate * bytesPerSample;
-    
+
     if (bytesPerSecond >= 1024) {
       return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
     }
@@ -137,6 +152,80 @@ export function ControlPanel({
           <div className="flex justify-between text-xs text-muted-foreground font-medium">
             <span>1-bit</span>
             <span>32-bit</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium uppercase tracking-wide text-foreground">
+                Pitch (Frequency)
+              </label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3 h-3 text-muted-foreground" data-testid="info-frequency" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-xs">
+                    The frequency of the tone being generated. Visualizer displays exactly 1 second of this frequency.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <span className="text-xl font-mono tabular-nums text-foreground" data-testid="text-frequency">
+              {formatFrequency(frequency)}
+            </span>
+          </div>
+          <Slider
+            value={[frequency]}
+            onValueChange={([value]) => onFrequencyChange(value)}
+            min={20}
+            max={20000}
+            step={1}
+            className="w-full"
+            aria-label="Frequency in Hertz"
+            data-testid="slider-frequency"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground font-medium">
+            <span>20 Hz</span>
+            <span>20 kHz</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium uppercase tracking-wide text-foreground">
+                Zoom Level
+              </label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3 h-3 text-muted-foreground" data-testid="info-zoom" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-xs">
+                    Zoom in to see sample capture points more clearly.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <span className="text-xl font-mono tabular-nums text-foreground" data-testid="text-zoom">
+              {zoomLevel.toFixed(1)}x
+            </span>
+          </div>
+          <Slider
+            value={[zoomLevel]}
+            onValueChange={([value]) => onZoomLevelChange(value)}
+            min={1}
+            max={100}
+            step={0.1}
+            className="w-full"
+            aria-label="Zoom level"
+            data-testid="slider-zoom"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground font-medium">
+            <span>1x</span>
+            <span>100x</span>
           </div>
         </div>
 

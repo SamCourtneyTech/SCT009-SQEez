@@ -9,9 +9,10 @@ export default function Visualizer() {
   const [sampleRate, setSampleRate] = useState(8000);
   const [bitDepth, setBitDepth] = useState(8);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [frequency] = useState(440);
+  const [frequency, setFrequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -57,6 +58,14 @@ export default function Visualizer() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
+  // Update oscillator frequency when it changes (without restarting audio)
+  useEffect(() => {
+    if (isPlaying && oscillatorRef.current) {
+      oscillatorRef.current.frequency.value = frequency;
+    }
+  }, [frequency, isPlaying]);
+
+  // Update oscillator waveform type when it changes (requires restart)
   useEffect(() => {
     if (!isPlaying || sampleRate > hardwareMaxRate) {
       return;
@@ -85,10 +94,10 @@ export default function Visualizer() {
       for (let i = 0; i < input.length; i++) {
         if (sampleRate < actualContextRate) {
           phaseAccumulator += 1.0;
-          
+
           if (phaseAccumulator >= downsampleRatio) {
             phaseAccumulator -= downsampleRatio;
-            
+
             const normalized = (input[i] + 1) / 2;
             const quantized = Math.floor(normalized * quantizationLevels);
             const clamped = Math.max(0, Math.min(quantizationLevels - 1, quantized));
@@ -134,20 +143,21 @@ export default function Visualizer() {
         }
       } catch (e) {
       }
-      
+
       try {
         crusher.disconnect();
         gainNode.disconnect();
       } catch (e) {
       }
-      
+
       if (ctx.state !== 'closed') {
         ctx.close().catch(() => {});
       }
-      
+
       audioContextRef.current = null;
+      oscillatorRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, frequency, waveformType, hardwareMaxRate, audioBuffer]);
+  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate, audioBuffer]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
@@ -194,9 +204,13 @@ export default function Visualizer() {
             hardwareMaxRate={hardwareMaxRate}
             waveformType={waveformType}
             audioBuffer={audioBuffer}
+            frequency={frequency}
+            zoomLevel={zoomLevel}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
             onWaveformTypeChange={setWaveformType}
+            onFrequencyChange={setFrequency}
+            onZoomLevelChange={setZoomLevel}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
             onFileUpload={handleFileUpload}
             onClearAudio={() => setAudioBuffer(null)}
@@ -218,6 +232,7 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  zoomLevel={zoomLevel}
                   type="original"
                   className="w-full h-full"
                 />
