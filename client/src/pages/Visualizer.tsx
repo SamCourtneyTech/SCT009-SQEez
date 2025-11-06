@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { WaveformCanvas } from '@/components/WaveformCanvas';
 import { ControlPanel } from '@/components/ControlPanel';
 import { Card } from '@/components/ui/card';
+import { WaveformType } from '@shared/schema';
 
 export default function Visualizer() {
   const [hardwareMaxRate, setHardwareMaxRate] = useState(48000);
@@ -9,6 +10,7 @@ export default function Visualizer() {
   const [bitDepth, setBitDepth] = useState(8);
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency] = useState(440);
+  const [waveformType, setWaveformType] = useState<WaveformType>('sine');
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -47,7 +49,7 @@ export default function Visualizer() {
 
     const oscillator = ctx.createOscillator();
     oscillator.frequency.value = frequency;
-    oscillator.type = 'sine';
+    oscillator.type = waveformType;
 
     const gainNode = ctx.createGain();
     gainNode.gain.value = 0.3;
@@ -113,7 +115,7 @@ export default function Visualizer() {
       
       audioContextRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, frequency]);
+  }, [isPlaying, sampleRate, bitDepth, frequency, waveformType, hardwareMaxRate]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
@@ -158,8 +160,10 @@ export default function Visualizer() {
             bitDepth={bitDepth}
             isPlaying={isPlaying}
             hardwareMaxRate={hardwareMaxRate}
+            waveformType={waveformType}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
+            onWaveformTypeChange={setWaveformType}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
           />
         </aside>
@@ -177,6 +181,7 @@ export default function Visualizer() {
                   sampleRate={sampleRate}
                   bitDepth={bitDepth}
                   frequency={frequency}
+                  waveformType={waveformType}
                   type="original"
                   className="w-full h-full"
                 />
@@ -194,6 +199,7 @@ export default function Visualizer() {
                   sampleRate={sampleRate}
                   bitDepth={bitDepth}
                   frequency={frequency}
+                  waveformType={waveformType}
                   type="quantized"
                   className="w-full h-full"
                 />
@@ -211,6 +217,7 @@ export default function Visualizer() {
                   sampleRate={sampleRate}
                   bitDepth={bitDepth}
                   frequency={frequency}
+                  waveformType={waveformType}
                   type="binary"
                   className="w-full h-full"
                 />

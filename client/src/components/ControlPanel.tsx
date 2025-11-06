@@ -3,14 +3,18 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { WaveformType } from '@shared/schema';
 
 interface ControlPanelProps {
   sampleRate: number;
   bitDepth: number;
   isPlaying: boolean;
   hardwareMaxRate: number;
+  waveformType: WaveformType;
   onSampleRateChange: (value: number) => void;
   onBitDepthChange: (value: number) => void;
+  onWaveformTypeChange: (value: WaveformType) => void;
   onPlayPauseToggle: () => void;
 }
 
@@ -19,8 +23,10 @@ export function ControlPanel({
   bitDepth,
   isPlaying,
   hardwareMaxRate,
+  waveformType,
   onSampleRateChange,
   onBitDepthChange,
+  onWaveformTypeChange,
   onPlayPauseToggle,
 }: ControlPanelProps) {
   const quantizationLevels = Math.pow(2, bitDepth);
@@ -124,6 +130,35 @@ export function ControlPanel({
             <span>1-bit</span>
             <span>32-bit</span>
           </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium uppercase tracking-wide text-foreground">
+              Waveform Type
+            </label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="w-3 h-3 text-muted-foreground" data-testid="info-waveform-type" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs max-w-xs">
+                  Select the shape of the waveform to visualize and sample.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <Select value={waveformType} onValueChange={onWaveformTypeChange}>
+            <SelectTrigger className="w-full" data-testid="select-waveform-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sine">Sine Wave</SelectItem>
+              <SelectItem value="square">Square Wave</SelectItem>
+              <SelectItem value="triangle">Triangle Wave</SelectItem>
+              <SelectItem value="sawtooth">Sawtooth Wave</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <Card className="p-4 space-y-3 bg-card">

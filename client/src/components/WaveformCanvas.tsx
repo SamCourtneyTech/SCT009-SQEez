@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
+import { WaveformType, generateWaveform } from '@shared/schema';
 
 interface WaveformCanvasProps {
   sampleRate: number;
   bitDepth: number;
   frequency: number;
+  waveformType: WaveformType;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, type }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, className, type }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const scrollOffsetRef = useRef(0);
@@ -79,7 +81,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
       
       for (let x = 0; x < width; x++) {
         const t = (x / width) * displayDuration + time;
-        const y = centerY + Math.sin(2 * Math.PI * frequency * t) * amplitude;
+        const y = centerY + generateWaveform(t, frequency, waveformType) * amplitude;
         
         if (x === 0) {
           ctx.moveTo(x, y);
@@ -97,7 +99,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
         const t = (sampleIndex / totalSamples) * displayDuration + time;
-        const sampleValue = Math.sin(2 * Math.PI * frequency * t);
+        const sampleValue = generateWaveform(t, frequency, waveformType);
         const y = centerY + sampleValue * amplitude;
 
         if (samplesInView <= 100) {
@@ -139,7 +141,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
         const t = (sampleIndex / totalSamples) * displayDuration + time;
-        const sampleValue = Math.sin(2 * Math.PI * frequency * t);
+        const sampleValue = generateWaveform(t, frequency, waveformType);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
 
@@ -162,7 +164,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
         const t = (sampleIndex / totalSamples) * displayDuration + time;
-        const sampleValue = Math.sin(2 * Math.PI * frequency * t);
+        const sampleValue = generateWaveform(t, frequency, waveformType);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
 
@@ -196,7 +198,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
       for (let i = 0; i < maxValues; i++) {
         const sampleIndex = startIndex + i;
         const t = sampleIndex / sampleRate;
-        const sampleValue = Math.sin(2 * Math.PI * frequency * t);
+        const sampleValue = generateWaveform(t, frequency, waveformType);
         const quantizedValue = quantize(sampleValue);
 
         const binary = quantizedValue.toString(2).padStart(bitDepth, '0');
@@ -241,7 +243,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, className, typ
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, type]);
+  }, [sampleRate, bitDepth, frequency, waveformType, type]);
 
   return (
     <canvas
