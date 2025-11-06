@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { WaveformCanvas } from '@/components/WaveformCanvas';
-import { SpectrumCanvas } from '@/components/SpectrumCanvas';
 import { ControlPanel } from '@/components/ControlPanel';
 import { Card } from '@/components/ui/card';
 import { WaveformType } from '@shared/schema';
@@ -15,12 +14,10 @@ export default function Visualizer() {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState(0);
-  const [showSpectrum, setShowSpectrum] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -88,11 +85,6 @@ export default function Visualizer() {
     const gainNode = ctx.createGain();
     gainNode.gain.value = 0.3;
 
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.8;
-    analyserRef.current = analyser;
-
     const quantizationLevels = Math.pow(2, bitDepth);
     const crusher = ctx.createScriptProcessor(4096, 1, 1);
 
@@ -146,8 +138,7 @@ export default function Visualizer() {
     }
 
     crusher.connect(gainNode);
-    gainNode.connect(analyser);
-    analyser.connect(ctx.destination);
+    gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
     return () => {
@@ -161,7 +152,6 @@ export default function Visualizer() {
       try {
         crusher.disconnect();
         gainNode.disconnect();
-        analyser.disconnect();
       } catch (e) {
       }
       
@@ -170,7 +160,6 @@ export default function Visualizer() {
       }
       
       audioContextRef.current = null;
-      analyserRef.current = null;
     };
   }, [isPlaying, sampleRate, bitDepth, frequency, waveformType, hardwareMaxRate, audioBuffer]);
 
@@ -221,7 +210,6 @@ export default function Visualizer() {
             audioBuffer={audioBuffer}
             zoomLevel={zoomLevel}
             panOffset={panOffset}
-            showSpectrum={showSpectrum}
             onSampleRateChange={setSampleRate}
             onBitDepthChange={setBitDepth}
             onWaveformTypeChange={setWaveformType}
@@ -232,7 +220,6 @@ export default function Visualizer() {
             onPanLeft={handlePanLeft}
             onPanRight={handlePanRight}
             onResetView={handleResetView}
-            onShowSpectrumToggle={() => setShowSpectrum(!showSpectrum)}
           />
         </aside>
 
@@ -300,26 +287,6 @@ export default function Visualizer() {
                 />
               </Card>
             </div>
-
-            {showSpectrum && (
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                    Frequency Spectrum (FFT)
-                  </h2>
-                  <span className="text-xs text-muted-foreground">
-                    {isPlaying ? 'Live Analysis' : 'Paused'}
-                  </span>
-                </div>
-                <Card className="flex-1 p-2 bg-card min-h-0" data-testid="card-spectrum">
-                  <SpectrumCanvas
-                    analyserNode={analyserRef.current}
-                    sampleRate={sampleRate}
-                    className="w-full h-full"
-                  />
-                </Card>
-              </div>
-            )}
           </div>
         </main>
       </div>
