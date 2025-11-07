@@ -229,6 +229,25 @@ export function ControlPanel({
           </div>
         </div>
 
+        <Button
+          onClick={onPlayPauseToggle}
+          className="w-full"
+          size="lg"
+          data-testid="button-play-pause"
+        >
+          {isPlaying ? (
+            <>
+              <Pause className="w-4 h-4 mr-2" />
+              Pause Audio
+            </>
+          ) : (
+            <>
+              <Play className="w-4 h-4 mr-2" />
+              Play Audio
+            </>
+          )}
+        </Button>
+
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <label className="text-xs font-medium uppercase tracking-wide text-foreground">
@@ -344,25 +363,6 @@ export function ControlPanel({
           </div>
         </Card>
       </div>
-
-      <Button
-        onClick={onPlayPauseToggle}
-        className="w-full"
-        size="lg"
-        data-testid="button-play-pause"
-      >
-        {isPlaying ? (
-          <>
-            <Pause className="w-4 h-4 mr-2" />
-            Pause Audio
-          </>
-        ) : (
-          <>
-            <Play className="w-4 h-4 mr-2" />
-            Play Audio
-          </>
-        )}
-      </Button>
     </div>
   );
 }

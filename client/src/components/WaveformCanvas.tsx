@@ -59,6 +59,27 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       ctx.stroke();
       ctx.setLineDash([]);
 
+      // Draw horizontal quantization level lines (only if not too dense)
+      const quantizationLevels = Math.pow(2, bitDepth);
+      const stepSize = (height * 0.7) / quantizationLevels;
+
+      // Only draw level lines if there's enough space between them (at least 3 pixels)
+      if (stepSize >= 3) {
+        ctx.strokeStyle = borderColor ? `hsl(${borderColor})` : '#555555';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 2]); // Longer dashes, shorter gaps
+
+        for (let i = 0; i < quantizationLevels; i++) {
+          const yPos = height * 0.15 + i * stepSize;
+          ctx.beginPath();
+          ctx.moveTo(0, yPos);
+          ctx.lineTo(width, yPos);
+          ctx.stroke();
+        }
+
+        ctx.setLineDash([]);
+      }
+
       // Display exactly 1 second of the waveform
       const displayDuration = 1.0; // 1 second
       const timePerPixel = (displayDuration / zoomLevel) / width;
@@ -144,7 +165,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       window.removeEventListener('resize', handleResize);
     };
 
-  }, [type, sampleRate, frequency, waveformType, zoomLevel]);
+  }, [type, sampleRate, bitDepth, frequency, waveformType, zoomLevel]);
 
   if (type === 'original') {
     return (
@@ -165,20 +186,23 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
+    const setupCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
 
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
-    const centerY = height / 2;
-    const amplitude = height * 0.35;
+      return {
+        width: rect.width,
+        height: rect.height,
+        centerY: rect.height / 2,
+        amplitude: rect.height * 0.35
+      };
+    };
 
-    const quantizationLevels = Math.pow(2, bitDepth);
-    const stepSize = (height * 0.7) / quantizationLevels;
+    let { width, height, centerY, amplitude } = setupCanvas();
 
     const baseDuration = Math.max(0.5, Math.min(5, 1000 / sampleRate));
     const displayDuration = baseDuration;
@@ -199,6 +223,10 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     };
 
     const drawGrid = () => {
+      // Recalculate these values each time to ensure they're always up to date
+      const quantizationLevels = Math.pow(2, bitDepth);
+      const stepSize = (height * 0.7) / quantizationLevels;
+
       ctx.strokeStyle = 'hsl(var(--border))';
       ctx.lineWidth = 0.5;
       ctx.setLineDash([2, 4]);
@@ -208,7 +236,11 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       ctx.lineTo(width, centerY);
       ctx.stroke();
 
-      if (type === 'quantized') {
+      if (type === 'quantized' && bitDepth <= 5) {
+        // Make lines more visible with longer dashes
+        ctx.setLineDash([4, 2]);
+        ctx.lineWidth = 1;
+
         for (let i = 0; i < quantizationLevels; i++) {
           const y = height * 0.15 + i * stepSize;
           ctx.beginPath();
@@ -226,6 +258,8 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       ctx.fillRect(0, 0, width, height);
 
       drawGrid();
+
+      const quantizationLevels = Math.pow(2, bitDepth);
 
       const quantize = (value: number) => {
         const normalized = (value + 1) / 2;
@@ -283,6 +317,8 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         ctx.fillStyle = bgColor ? `hsl(${bgColor})` : '#ffffff';
         ctx.fillRect(0, 0, width, height);
       }
+
+      const quantizationLevels = Math.pow(2, bitDepth);
 
       const quantize = (value: number) => {
         const normalized = (value + 1) / 2;
