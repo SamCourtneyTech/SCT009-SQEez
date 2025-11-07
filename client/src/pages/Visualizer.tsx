@@ -11,33 +11,11 @@ export default function Visualizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
-  const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    const tempCtx = new AudioContextClass();
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
-      setAudioBuffer(decodedBuffer);
-      setIsPlaying(false);
-    } catch (error) {
-      console.error('Error decoding audio file:', error);
-      alert('Failed to load audio file. Please try a different file.');
-    } finally {
-      tempCtx.close();
-    }
-  };
-
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -92,7 +70,7 @@ export default function Visualizer() {
     let needNewSample = true;
 
     // Use linear interpolation only for sine waves
-    const useInterpolation = !audioBuffer && waveformType === 'sine';
+    const useInterpolation = waveformType === 'sine';
 
     crusher.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
@@ -148,24 +126,12 @@ export default function Visualizer() {
       }
     };
 
-    let sourceNode: AudioScheduledSourceNode;
-
-    if (audioBuffer) {
-      const bufferSource = ctx.createBufferSource();
-      bufferSource.buffer = audioBuffer;
-      bufferSource.loop = true;
-      bufferSource.connect(crusher);
-      bufferSource.start();
-      sourceNode = bufferSource;
-    } else {
-      const oscillator = ctx.createOscillator();
-      oscillator.frequency.value = frequency;
-      oscillator.type = waveformType;
-      oscillator.connect(crusher);
-      oscillator.start();
-      sourceNode = oscillator;
-      oscillatorRef.current = oscillator;
-    }
+    const oscillator = ctx.createOscillator();
+    oscillator.frequency.value = frequency;
+    oscillator.type = waveformType;
+    oscillator.connect(crusher);
+    oscillator.start();
+    oscillatorRef.current = oscillator;
 
     crusher.connect(gainNode);
     gainNode.connect(ctx.destination);
@@ -173,9 +139,7 @@ export default function Visualizer() {
 
     return () => {
       try {
-        if (sourceNode) {
-          sourceNode.stop();
-        }
+        oscillator.stop();
       } catch (e) {
       }
 
@@ -192,7 +156,7 @@ export default function Visualizer() {
       audioContextRef.current = null;
       oscillatorRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate, audioBuffer]);
+  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate, frequency]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
@@ -238,7 +202,6 @@ export default function Visualizer() {
             isPlaying={isPlaying}
             hardwareMaxRate={hardwareMaxRate}
             waveformType={waveformType}
-            audioBuffer={audioBuffer}
             frequency={frequency}
             zoomLevel={zoomLevel}
             onSampleRateChange={setSampleRate}
@@ -247,8 +210,6 @@ export default function Visualizer() {
             onFrequencyChange={setFrequency}
             onZoomLevelChange={setZoomLevel}
             onPlayPauseToggle={() => setIsPlaying(!isPlaying)}
-            onFileUpload={handleFileUpload}
-            onClearAudio={() => setAudioBuffer(null)}
           />
         </aside>
 
@@ -266,7 +227,6 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
-                  audioBuffer={audioBuffer}
                   zoomLevel={zoomLevel}
                   isPlaying={isPlaying}
                   type="original"
@@ -287,7 +247,6 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
-                  audioBuffer={audioBuffer}
                   isPlaying={isPlaying}
                   type="quantized"
                   className="w-full h-full"
@@ -307,7 +266,6 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
-                  audioBuffer={audioBuffer}
                   isPlaying={isPlaying}
                   type="binary"
                   className="w-full h-full"

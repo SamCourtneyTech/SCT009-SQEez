@@ -1,11 +1,10 @@
-import { Play, Pause, Info, AlertTriangle, Upload, X } from 'lucide-react';
+import { Play, Pause, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WaveformType } from '@shared/schema';
-import { useRef } from 'react';
 
 interface ControlPanelProps {
   sampleRate: number;
@@ -13,7 +12,6 @@ interface ControlPanelProps {
   isPlaying: boolean;
   hardwareMaxRate: number;
   waveformType: WaveformType;
-  audioBuffer: AudioBuffer | null;
   frequency: number;
   zoomLevel: number;
   onSampleRateChange: (value: number) => void;
@@ -22,8 +20,6 @@ interface ControlPanelProps {
   onFrequencyChange: (value: number) => void;
   onZoomLevelChange: (value: number) => void;
   onPlayPauseToggle: () => void;
-  onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onClearAudio: () => void;
 }
 
 export function ControlPanel({
@@ -32,7 +28,6 @@ export function ControlPanel({
   isPlaying,
   hardwareMaxRate,
   waveformType,
-  audioBuffer,
   frequency,
   zoomLevel,
   onSampleRateChange,
@@ -41,10 +36,7 @@ export function ControlPanel({
   onFrequencyChange,
   onZoomLevelChange,
   onPlayPauseToggle,
-  onFileUpload,
-  onClearAudio,
 }: ControlPanelProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
   
@@ -275,58 +267,6 @@ export function ControlPanel({
               <SelectItem value="sawtooth">Sawtooth Wave</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-foreground">
-              Custom Audio
-            </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="w-3 h-3 text-muted-foreground" data-testid="info-custom-audio" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-xs">
-                  Upload your own audio file (WAV/MP3) to visualize and quantize.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            onChange={onFileUpload}
-            className="hidden"
-            data-testid="input-audio-file"
-          />
-          {!audioBuffer ? (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => fileInputRef.current?.click()}
-              data-testid="button-upload-audio"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Audio File
-            </Button>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">
-                Loaded: {audioBuffer.duration.toFixed(2)}s @ {(audioBuffer.sampleRate / 1000).toFixed(1)} kHz
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={onClearAudio}
-                data-testid="button-clear-audio"
-              >
-                <X className="w-4 h-4 mr-2" />
-                Clear Audio
-              </Button>
-            </div>
-          )}
         </div>
 
         <Card className="p-4 space-y-3 bg-card">

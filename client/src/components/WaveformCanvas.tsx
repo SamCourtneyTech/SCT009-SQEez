@@ -6,14 +6,13 @@ interface WaveformCanvasProps {
   bitDepth: number;
   frequency: number;
   waveformType: WaveformType;
-  audioBuffer?: AudioBuffer | null;
   zoomLevel?: number;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
   isPlaying?: boolean;
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, className, type, isPlaying = false }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, zoomLevel = 1, className, type, isPlaying = false }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const animationRef = useRef<number>();
@@ -213,13 +212,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     const sampleStride = Math.max(1, Math.floor(totalSamples / maxDisplaySamples));
 
     const getSampleValue = (t: number): number => {
-      if (audioBuffer) {
-        const bufferData = audioBuffer.getChannelData(0);
-        const sampleIndex = Math.floor((t * audioBuffer.sampleRate) % bufferData.length);
-        return bufferData[sampleIndex];
-      } else {
-        return generateWaveform(t, frequency, waveformType);
-      }
+      return generateWaveform(t, frequency, waveformType);
     };
 
     const drawGrid = () => {
@@ -393,7 +386,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, type, isPlaying]);
+  }, [sampleRate, bitDepth, frequency, waveformType, type, isPlaying]);
 
   return (
     <canvas
