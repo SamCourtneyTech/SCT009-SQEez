@@ -137,7 +137,14 @@ export default function Visualizer() {
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
+    // Auto-stop after 1 second
+    const stopTimeout = setTimeout(() => {
+      setIsPlaying(false);
+    }, 1000);
+
     return () => {
+      clearTimeout(stopTimeout);
+
       try {
         oscillator.stop();
       } catch (e) {
@@ -156,7 +163,7 @@ export default function Visualizer() {
       audioContextRef.current = null;
       oscillatorRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate, frequency]);
+  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
