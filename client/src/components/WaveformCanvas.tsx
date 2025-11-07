@@ -205,11 +205,6 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
 
     // Use the same duration calculation as the original visualizer to sync zoom
     const displayDuration = 1.0 / zoomLevel; // 1 second divided by zoom level
-    const totalSamples = Math.max(2, Math.floor(sampleRate * displayDuration));
-    const maxDisplaySamples = 500;
-    const samplesInView = Math.min(totalSamples, maxDisplaySamples);
-    const sampleSpacing = width / samplesInView;
-    const sampleStride = Math.max(1, Math.floor(totalSamples / maxDisplaySamples));
 
     const getSampleValue = (t: number): number => {
       return generateWaveform(t, frequency, waveformType);
@@ -243,23 +238,58 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         return (clamped / (quantizationLevels - 1)) * 2 - 1;
       };
 
+      // Calculate how many samples fit in the display duration
+      const totalSamples = Math.floor(sampleRate * displayDuration);
+      const sampleInterval = 1 / sampleRate; // Time between samples in seconds
+      const timePerPixel = displayDuration / width;
+
       // Draw discrete sample points only
       const computedStyle = getComputedStyle(canvas);
       const chart2Color = computedStyle.getPropertyValue('--chart-2');
       ctx.fillStyle = chart2Color ? `hsl(${chart2Color})` : '#10b981';
-      const pointSize = Math.max(4, Math.min(8, sampleSpacing / 3));
 
-      for (let i = 0; i < samplesInView; i++) {
-        const x = i * sampleSpacing;
-        const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration;
-        const sampleValue = getSampleValue(t);
-        const quantizedValue = quantize(sampleValue);
-        const y = centerY - quantizedValue * amplitude;
+      // Determine point size based on how close samples are
+      const pixelsPerSample = sampleInterval / timePerPixel;
+      const pointSize = Math.max(2, Math.min(8, pixelsPerSample / 3));
 
+      // Only draw samples that would be visible (at least 0.5 pixels apart)
+      if (pixelsPerSample >= 0.5) {
+        for (let sampleIndex = 0; sampleIndex < totalSamples; sampleIndex++) {
+          const t = sampleIndex * sampleInterval;
+          const x = t / timePerPixel;
+
+          if (x > width) break;
+
+          const sampleValue = getSampleValue(t);
+          const quantizedValue = quantize(sampleValue);
+          const y = centerY - quantizedValue * amplitude;
+
+          ctx.beginPath();
+          ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      } else {
+        // When samples are too dense, draw as a continuous line
+        ctx.strokeStyle = chart2Color ? `hsl(${chart2Color})` : '#10b981';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
-        ctx.fill();
+
+        for (let x = 0; x < width; x++) {
+          const t = x * timePerPixel;
+          // Find the nearest sample
+          const sampleIndex = Math.floor(t / sampleInterval);
+          const sampleT = sampleIndex * sampleInterval;
+          const sampleValue = getSampleValue(sampleT);
+          const quantizedValue = quantize(sampleValue);
+          const y = centerY - quantizedValue * amplitude;
+
+          if (x === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
       }
 
       // Draw label
