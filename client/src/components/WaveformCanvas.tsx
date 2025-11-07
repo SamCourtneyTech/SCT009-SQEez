@@ -275,8 +275,13 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     };
 
     const drawBinaryEncoding = (time: number) => {
-      ctx.fillStyle = 'hsl(var(--background))';
-      ctx.fillRect(0, 0, width, height);
+      // Only clear/redraw background on the first frame
+      if (!scrollOffsetRef.current || scrollOffsetRef.current === 0) {
+        const computedStyle = getComputedStyle(canvas);
+        const bgColor = computedStyle.getPropertyValue('--background');
+        ctx.fillStyle = bgColor ? `hsl(${bgColor})` : '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+      }
 
       const quantize = (value: number) => {
         const normalized = (value + 1) / 2;
@@ -291,6 +296,12 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       scrollOffsetRef.current += sampleRate / 60;
       const startIndex = Math.floor(scrollOffsetRef.current);
 
+      // Clear the canvas with the computed background color
+      const computedStyle = getComputedStyle(canvas);
+      const bgColor = computedStyle.getPropertyValue('--background');
+      ctx.fillStyle = bgColor ? `hsl(${bgColor})` : '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
       ctx.font = `${Math.min(14, binaryWidth / bitDepth)}px var(--font-mono)`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
@@ -302,21 +313,22 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         const quantizedValue = quantize(sampleValue);
 
         const binary = quantizedValue.toString(2).padStart(bitDepth, '0');
-        
+
         const hue = (quantizedValue / quantizationLevels) * 300;
         ctx.fillStyle = `hsl(${hue}, 70%, 55%)`;
 
         const x = width - (i * (binaryWidth + spacing)) - binaryWidth;
         const fadeIn = Math.min(1, i / 3);
         const alpha = fadeIn;
-        
+
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.fillText(binary, x, centerY);
         ctx.restore();
       }
 
-      ctx.fillStyle = 'hsl(var(--muted-foreground))';
+      const mutedFgColor = computedStyle.getPropertyValue('--muted-foreground');
+      ctx.fillStyle = mutedFgColor ? `hsl(${mutedFgColor})` : '#888888';
       ctx.font = '11px var(--font-sans)';
       ctx.textAlign = 'left';
       ctx.fillText(`${quantizationLevels} levels (${bitDepth}-bit)`, 8, 20);

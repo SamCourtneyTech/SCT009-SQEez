@@ -88,6 +88,11 @@ export default function Visualizer() {
     let phaseAccumulator = 0;
     const downsampleRatio = actualContextRate / sampleRate;
     let lastSample = 0;
+    let nextSample = 0;
+    let needNewSample = true;
+
+    // Use linear interpolation only for sine waves
+    const useInterpolation = !audioBuffer && waveformType === 'sine';
 
     crusher.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
@@ -95,18 +100,46 @@ export default function Visualizer() {
 
       for (let i = 0; i < input.length; i++) {
         if (sampleRate < actualContextRate) {
+          // Advance phase
           phaseAccumulator += 1.0;
 
+          // Check if we need to capture a new sample
           if (phaseAccumulator >= downsampleRatio) {
             phaseAccumulator -= downsampleRatio;
 
+            // Quantize the new sample
             const normalized = (input[i] + 1) / 2;
             const quantized = Math.floor(normalized * quantizationLevels);
             const clamped = Math.max(0, Math.min(quantizationLevels - 1, quantized));
-            lastSample = (clamped / (quantizationLevels - 1)) * 2 - 1;
+            const newSample = (clamped / (quantizationLevels - 1)) * 2 - 1;
+
+            if (useInterpolation) {
+              // Shift samples: next becomes last, and we capture a new next
+              lastSample = nextSample;
+              nextSample = newSample;
+
+              if (needNewSample) {
+                // First sample - initialize both
+                lastSample = nextSample;
+                needNewSample = false;
+              }
+            } else {
+              // Sample-and-hold for non-sine waves
+              lastSample = newSample;
+            }
           }
-          output[i] = lastSample;
+
+          if (useInterpolation) {
+            // Linear interpolation between lastSample and nextSample
+            // Phase accumulator tells us how far between samples we are
+            const interpolationFactor = phaseAccumulator / downsampleRatio;
+            output[i] = lastSample + (nextSample - lastSample) * interpolationFactor;
+          } else {
+            // Sample-and-hold
+            output[i] = lastSample;
+          }
         } else {
+          // When sampleRate >= actualContextRate, just quantize without resampling
           const normalized = (input[i] + 1) / 2;
           const quantized = Math.floor(normalized * quantizationLevels);
           const clamped = Math.max(0, Math.min(quantizationLevels - 1, quantized));
