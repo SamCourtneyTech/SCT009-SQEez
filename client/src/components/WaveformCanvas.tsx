@@ -203,8 +203,8 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
 
     let { width, height, centerY, amplitude } = setupCanvas();
 
-    const baseDuration = Math.max(0.5, Math.min(5, 1000 / sampleRate));
-    const displayDuration = baseDuration;
+    // Use the same duration calculation as the original visualizer to sync zoom
+    const displayDuration = 1.0 / zoomLevel; // 1 second divided by zoom level
     const totalSamples = Math.max(2, Math.floor(sampleRate * displayDuration));
     const maxDisplaySamples = 500;
     const samplesInView = Math.min(totalSamples, maxDisplaySamples);
@@ -216,10 +216,6 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
     };
 
     const drawGrid = () => {
-      // Recalculate these values each time to ensure they're always up to date
-      const quantizationLevels = Math.pow(2, bitDepth);
-      const stepSize = (height * 0.7) / quantizationLevels;
-
       ctx.strokeStyle = 'hsl(var(--border))';
       ctx.lineWidth = 0.5;
       ctx.setLineDash([2, 4]);
@@ -228,20 +224,6 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       ctx.moveTo(0, centerY);
       ctx.lineTo(width, centerY);
       ctx.stroke();
-
-      if (type === 'quantized' && bitDepth <= 5) {
-        // Make lines more visible with longer dashes
-        ctx.setLineDash([4, 2]);
-        ctx.lineWidth = 1;
-
-        for (let i = 0; i < quantizationLevels; i++) {
-          const y = height * 0.15 + i * stepSize;
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(width, y);
-          ctx.stroke();
-        }
-      }
 
       ctx.setLineDash([]);
     };
@@ -261,37 +243,16 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         return (clamped / (quantizationLevels - 1)) * 2 - 1;
       };
 
-      ctx.strokeStyle = 'hsl(var(--chart-2))';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
+      // Draw discrete sample points only
+      const computedStyle = getComputedStyle(canvas);
+      const chart2Color = computedStyle.getPropertyValue('--chart-2');
+      ctx.fillStyle = chart2Color ? `hsl(${chart2Color})` : '#10b981';
+      const pointSize = Math.max(4, Math.min(8, sampleSpacing / 3));
 
       for (let i = 0; i < samplesInView; i++) {
         const x = i * sampleSpacing;
         const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time;
-        const sampleValue = getSampleValue(t);
-        const quantizedValue = quantize(sampleValue);
-        const y = centerY - quantizedValue * amplitude;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-
-        if (i < samplesInView - 1) {
-          const nextX = (i + 1) * sampleSpacing;
-          ctx.lineTo(nextX, y);
-        }
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = 'hsl(var(--chart-2))';
-      const pointSize = Math.max(2, 3 * Math.min(1, 100 / samplesInView));
-      for (let i = 0; i < samplesInView; i++) {
-        const x = i * sampleSpacing;
-        const sampleIndex = i * sampleStride;
-        const t = (sampleIndex / totalSamples) * displayDuration + time;
+        const t = (sampleIndex / totalSamples) * displayDuration;
         const sampleValue = getSampleValue(t);
         const quantizedValue = quantize(sampleValue);
         const y = centerY - quantizedValue * amplitude;
@@ -300,6 +261,17 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
         ctx.fill();
       }
+
+      // Draw label
+      const mutedFgColor = getComputedStyle(canvas).getPropertyValue('--muted-foreground');
+      ctx.fillStyle = mutedFgColor ? `hsl(${mutedFgColor})` : '#888888';
+      ctx.font = '12px var(--font-sans)';
+      ctx.textAlign = 'left';
+      ctx.fillText(
+        `Discrete samples @ ${sampleRate} Hz (${displayDuration.toFixed(3)}s view)`,
+        8,
+        20
+      );
     };
 
     const drawBinaryEncoding = (time: number) => {
@@ -386,7 +358,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, waveformType, type, isPlaying]);
+  }, [sampleRate, bitDepth, frequency, waveformType, type, isPlaying, zoomLevel]);
 
   return (
     <canvas

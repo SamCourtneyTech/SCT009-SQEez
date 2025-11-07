@@ -11,7 +11,7 @@ export default function Visualizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(440);
   const [waveformType, setWaveformType] = useState<WaveformType>('sine');
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(100);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
@@ -247,6 +247,7 @@ export default function Visualizer() {
                   bitDepth={bitDepth}
                   frequency={frequency}
                   waveformType={waveformType}
+                  zoomLevel={zoomLevel}
                   isPlaying={isPlaying}
                   type="quantized"
                   className="w-full h-full"
