@@ -268,6 +268,7 @@ export default function Visualizer() {
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
                   zoomLevel={zoomLevel}
+                  isPlaying={isPlaying}
                   type="original"
                   className="w-full h-full"
                 />
@@ -287,6 +288,7 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  isPlaying={isPlaying}
                   type="quantized"
                   className="w-full h-full"
                 />
@@ -306,6 +308,7 @@ export default function Visualizer() {
                   frequency={frequency}
                   waveformType={waveformType}
                   audioBuffer={audioBuffer}
+                  isPlaying={isPlaying}
                   type="binary"
                   className="w-full h-full"
                 />

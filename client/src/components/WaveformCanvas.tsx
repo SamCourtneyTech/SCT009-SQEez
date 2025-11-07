@@ -10,9 +10,10 @@ interface WaveformCanvasProps {
   zoomLevel?: number;
   className?: string;
   type: 'original' | 'quantized' | 'binary';
+  isPlaying?: boolean;
 }
 
-export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, className, type }: WaveformCanvasProps) {
+export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, audioBuffer, zoomLevel = 1, className, type, isPlaying = false }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const animationRef = useRef<number>();
@@ -293,7 +294,10 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
       const spacing = 4;
       const maxValues = Math.floor(width / (binaryWidth + spacing));
 
-      scrollOffsetRef.current += sampleRate / 60;
+      // Only update scroll offset when playing
+      if (isPlaying) {
+        scrollOffsetRef.current += sampleRate / 60;
+      }
       const startIndex = Math.floor(scrollOffsetRef.current);
 
       // Clear the canvas with the computed background color
@@ -353,7 +357,7 @@ export function WaveformCanvas({ sampleRate, bitDepth, frequency, waveformType, 
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, type]);
+  }, [sampleRate, bitDepth, frequency, waveformType, audioBuffer, type, isPlaying]);
 
   return (
     <canvas
