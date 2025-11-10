@@ -48,6 +48,12 @@ export default function Visualizer() {
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = isPlaying ? 0.3 : 0;
     }
+    // Resume audio context if it's suspended (browser autoplay policy)
+    if (isPlaying && audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch((err) => {
+        console.error('Failed to resume audio context:', err);
+      });
+    }
   }, [isPlaying]);
 
   // Update oscillator waveform type when it changes (requires restart)
@@ -140,6 +146,13 @@ export default function Visualizer() {
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
+    // Resume audio context if playing and suspended (browser autoplay policy)
+    if (isPlaying && ctx.state === 'suspended') {
+      ctx.resume().catch((err) => {
+        console.error('Failed to resume audio context:', err);
+      });
+    }
+
     return () => {
       try {
         oscillator.stop();
@@ -159,7 +172,7 @@ export default function Visualizer() {
       audioContextRef.current = null;
       oscillatorRef.current = null;
     };
-  }, [sampleRate, bitDepth, waveformType, hardwareMaxRate]);
+  }, [sampleRate, bitDepth, waveformType, hardwareMaxRate, isPlaying]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
