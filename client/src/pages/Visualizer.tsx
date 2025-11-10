@@ -54,23 +54,14 @@ export default function Visualizer() {
         console.error('Failed to resume audio context:', err);
       });
     }
-
-    // Auto-stop playback after 1 second
-    if (isPlaying) {
-      const timeout = setTimeout(() => {
-        setIsPlaying(false);
-      }, 1000);
-      return () => clearTimeout(timeout);
-    }
   }, [isPlaying]);
 
   // Update oscillator waveform type when it changes (requires restart)
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    // Clamp sample rate to valid AudioContext range (3000-768000 Hz) and hardware max
-    // For playback, cap at hardware limit (48kHz) even if visualization uses higher rate
-    const requestedRate = Math.max(3000, Math.min(hardwareMaxRate, sampleRate));
-    const ctx = new AudioContextClass({ sampleRate: requestedRate });
+    // Always create AudioContext at hardware rate for proper downsampling
+    // The crusher will handle resampling to the desired sample rate
+    const ctx = new AudioContextClass();
     audioContextRef.current = ctx;
 
     const actualContextRate = ctx.sampleRate;
@@ -85,6 +76,11 @@ export default function Visualizer() {
     let lastSample = 0;
     let nextSample = 0;
     let needNewSample = true;
+
+    // Sample counting for precise 1-second playback
+    let samplesGenerated = 0;
+    const targetSamples = sampleRate; // 1 second worth of samples at target sample rate
+    let hasStoppedPlayback = false;
 
     // Use linear interpolation only for sine waves
     const useInterpolation = waveformType === 'sine';
@@ -101,6 +97,16 @@ export default function Visualizer() {
           // Check if we need to capture a new sample
           if (phaseAccumulator >= downsampleRatio) {
             phaseAccumulator -= downsampleRatio;
+
+            // Increment sample count
+            samplesGenerated++;
+
+            // Check if we've generated 1 second worth of samples
+            if (samplesGenerated >= targetSamples && !hasStoppedPlayback) {
+              hasStoppedPlayback = true;
+              // Stop playback after this audio processing block completes
+              setTimeout(() => setIsPlaying(false), 0);
+            }
 
             // Quantize the new sample
             const normalized = (input[i] + 1) / 2;
@@ -135,6 +141,15 @@ export default function Visualizer() {
           }
         } else {
           // When sampleRate >= actualContextRate, just quantize without resampling
+          // Count each hardware sample as a target sample
+          samplesGenerated++;
+
+          // Check if we've generated 1 second worth of samples
+          if (samplesGenerated >= targetSamples && !hasStoppedPlayback) {
+            hasStoppedPlayback = true;
+            setTimeout(() => setIsPlaying(false), 0);
+          }
+
           const normalized = (input[i] + 1) / 2;
           const quantized = Math.floor(normalized * quantizationLevels);
           const clamped = Math.max(0, Math.min(quantizationLevels - 1, quantized));
@@ -143,13 +158,21 @@ export default function Visualizer() {
       }
     };
 
+    // Add low-pass filter BEFORE the crusher to band-limit the signal
+    // This prevents aliasing when downsampling by removing frequencies above Nyquist
+    const lowPassFilter = ctx.createBiquadFilter();
+    lowPassFilter.type = 'lowpass';
+    lowPassFilter.frequency.value = sampleRate / 2; // Nyquist frequency
+    lowPassFilter.Q.value = 0.7071; // Butterworth response (maximally flat)
+
     const oscillator = ctx.createOscillator();
     oscillator.frequency.value = frequency;
     oscillator.type = waveformType;
-    oscillator.connect(crusher);
+    oscillator.connect(lowPassFilter);
     oscillator.start();
     oscillatorRef.current = oscillator;
 
+    lowPassFilter.connect(crusher);
     crusher.connect(gainNode);
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
@@ -169,6 +192,7 @@ export default function Visualizer() {
 
       try {
         crusher.disconnect();
+        lowPassFilter.disconnect();
         gainNode.disconnect();
       } catch (e) {
       }
