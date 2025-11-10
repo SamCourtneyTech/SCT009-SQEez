@@ -54,6 +54,14 @@ export default function Visualizer() {
         console.error('Failed to resume audio context:', err);
       });
     }
+
+    // Auto-stop playback after 1 second
+    if (isPlaying) {
+      const timeout = setTimeout(() => {
+        setIsPlaying(false);
+      }, 1000);
+      return () => clearTimeout(timeout);
+    }
   }, [isPlaying]);
 
   // Update oscillator waveform type when it changes (requires restart)
