@@ -38,17 +38,20 @@ export default function Visualizer() {
 
   // Update oscillator frequency when it changes (without restarting audio)
   useEffect(() => {
-    if (isPlaying && oscillatorRef.current) {
+    if (oscillatorRef.current) {
       oscillatorRef.current.frequency.value = frequency;
     }
-  }, [frequency, isPlaying]);
+  }, [frequency]);
+
+  // Update gain when play/pause state changes
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = isPlaying ? 0.3 : 0;
+    }
+  }, [isPlaying]);
 
   // Update oscillator waveform type when it changes (requires restart)
   useEffect(() => {
-    if (!isPlaying) {
-      return;
-    }
-
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     // Clamp sample rate to valid AudioContext range (3000-768000 Hz) and hardware max
     // For playback, cap at hardware limit (48kHz) even if visualization uses higher rate
@@ -58,7 +61,7 @@ export default function Visualizer() {
 
     const actualContextRate = ctx.sampleRate;
     const gainNode = ctx.createGain();
-    gainNode.gain.value = 0.3;
+    gainNode.gain.value = isPlaying ? 0.3 : 0;
 
     const quantizationLevels = Math.pow(2, bitDepth);
     const crusher = ctx.createScriptProcessor(4096, 1, 1);
@@ -137,14 +140,7 @@ export default function Visualizer() {
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
-    // Auto-stop after 1 second
-    const stopTimeout = setTimeout(() => {
-      setIsPlaying(false);
-    }, 1000);
-
     return () => {
-      clearTimeout(stopTimeout);
-
       try {
         oscillator.stop();
       } catch (e) {
@@ -163,7 +159,7 @@ export default function Visualizer() {
       audioContextRef.current = null;
       oscillatorRef.current = null;
     };
-  }, [isPlaying, sampleRate, bitDepth, waveformType, hardwareMaxRate]);
+  }, [sampleRate, bitDepth, waveformType, hardwareMaxRate]);
 
   const quantizationLevels = Math.pow(2, bitDepth);
   const nyquistFrequency = sampleRate / 2;
