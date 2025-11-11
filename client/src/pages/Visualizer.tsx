@@ -96,21 +96,49 @@ export default function Visualizer() {
     let phaseAccumulator = 0;
     const downsampleRatio = actualContextRate / sampleRate;
 
-    // Sinc interpolation parameters
-    const sincRadius = 32; // Number of samples on each side for sinc kernel
-    const sampleBuffer: number[] = []; // Buffer to store quantized samples for sinc interpolation
+    // Polyphase FIR filter parameters
+    const filterLength = 64; // Taps per polyphase branch
+    const numPhases = 256; // Number of polyphase branches (interpolation phases)
+    const sampleBuffer: number[] = []; // Buffer to store quantized samples
 
-    // Windowed sinc function (Lanczos window)
+    // Blackman-Harris window (4-term, excellent stopband attenuation ~92dB)
+    const blackmanHarris = (n: number, N: number): number => {
+      const a0 = 0.35875;
+      const a1 = 0.48829;
+      const a2 = 0.14128;
+      const a3 = 0.01168;
+      const factor = (2 * Math.PI * n) / (N - 1);
+      return a0 - a1 * Math.cos(factor) + a2 * Math.cos(2 * factor) - a3 * Math.cos(3 * factor);
+    };
+
+    // Band-limited sinc function
     const sinc = (x: number): number => {
       if (Math.abs(x) < 1e-10) return 1.0;
       const piX = Math.PI * x;
       return Math.sin(piX) / piX;
     };
 
-    const lanczosWindow = (x: number, a: number): number => {
-      if (Math.abs(x) > a) return 0;
-      return sinc(x / a);
-    };
+    // Pre-compute polyphase FIR filter coefficients
+    const filterCoeffs: number[][] = [];
+    const totalTaps = filterLength * numPhases;
+
+    for (let phase = 0; phase < numPhases; phase++) {
+      const phaseCoeffs: number[] = [];
+      for (let tap = 0; tap < filterLength; tap++) {
+        const n = tap * numPhases + phase;
+        const x = n - totalTaps / 2;
+        const normalizedX = x / numPhases; // Normalize for sinc function
+
+        // Windowed sinc: sinc(x) * window(n)
+        const sincValue = sinc(normalizedX);
+        const windowValue = blackmanHarris(n, totalTaps);
+        phaseCoeffs.push(sincValue * windowValue);
+      }
+
+      // Normalize coefficients so sum = 1
+      const sum = phaseCoeffs.reduce((acc, val) => acc + val, 0);
+      filterCoeffs.push(phaseCoeffs.map(c => c / sum));
+    }
 
     crusher.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
@@ -133,26 +161,24 @@ export default function Visualizer() {
             sampleBuffer.push(quantizedSample);
 
             // Keep buffer size manageable
-            if (sampleBuffer.length > sincRadius * 2 + 1) {
+            if (sampleBuffer.length > filterLength) {
               sampleBuffer.shift();
             }
           }
 
-          // Sinc interpolation
-          if (sampleBuffer.length >= sincRadius * 2 + 1) {
-            // Calculate fractional position within the downsample period
+          // Polyphase FIR interpolation
+          if (sampleBuffer.length >= filterLength) {
+            // Calculate fractional position and select polyphase branch
             const fracPos = phaseAccumulator / downsampleRatio;
+            const phaseIndex = Math.floor(fracPos * numPhases) % numPhases;
+            const coeffs = filterCoeffs[phaseIndex];
 
+            // Apply FIR filter
             let interpolatedSample = 0;
-            const centerIdx = sampleBuffer.length - sincRadius - 1;
+            const startIdx = sampleBuffer.length - filterLength;
 
-            for (let j = -sincRadius; j <= sincRadius; j++) {
-              const bufferIdx = centerIdx + j;
-              if (bufferIdx >= 0 && bufferIdx < sampleBuffer.length) {
-                const x = j - fracPos;
-                const weight = sinc(x) * lanczosWindow(x, sincRadius);
-                interpolatedSample += sampleBuffer[bufferIdx] * weight;
-              }
+            for (let tap = 0; tap < filterLength; tap++) {
+              interpolatedSample += sampleBuffer[startIdx + tap] * coeffs[tap];
             }
 
             output[i] = interpolatedSample;
@@ -170,25 +196,116 @@ export default function Visualizer() {
       }
     };
 
-    // Anti-aliasing filter BEFORE downsampling to prevent aliasing
-    const nyquist = sampleRate / 2;
-    const antiAliasFilter = ctx.createBiquadFilter();
-    antiAliasFilter.type = 'lowpass';
-    antiAliasFilter.frequency.value = nyquist * 0.8; // Conservative cutoff at 80% of Nyquist
-    antiAliasFilter.Q.value = 0.707; // Butterworth response
+    // Rate-adaptive Kaiser-windowed FIR filters
+    // Modified Bessel function of the first kind (I0) - needed for Kaiser window
+    const besselI0 = (x: number): number => {
+      let sum = 1.0;
+      let term = 1.0;
+      for (let k = 1; k < 50; k++) {
+        term *= (x * x) / (4 * k * k);
+        sum += term;
+        if (term < 1e-12 * sum) break;
+      }
+      return sum;
+    };
 
-    // Reconstruction filter AFTER sample-and-hold to remove imaging artifacts
-    // This is critical - the stepped output from sample-and-hold creates images
-    // that need to be filtered out before we hear them
-    const reconstructionFilter1 = ctx.createBiquadFilter();
-    reconstructionFilter1.type = 'lowpass';
-    reconstructionFilter1.frequency.value = nyquist * 0.9;
-    reconstructionFilter1.Q.value = 0.5412; // 4th-order Butterworth Q1
+    // Kaiser window function (beta ≈ 8.5 for ~100 dB stopband)
+    const kaiserWindow = (n: number, N: number, beta: number): number => {
+      const alpha = (N - 1) / 2;
+      const arg = beta * Math.sqrt(1 - Math.pow((n - alpha) / alpha, 2));
+      return besselI0(arg) / besselI0(beta);
+    };
 
-    const reconstructionFilter2 = ctx.createBiquadFilter();
-    reconstructionFilter2.type = 'lowpass';
-    reconstructionFilter2.frequency.value = nyquist * 0.9;
-    reconstructionFilter2.Q.value = 1.3065; // 4th-order Butterworth Q2
+    // FFT helper for passband gain normalization
+    const computePassbandGain = (coeffs: number[], normalizedCutoff: number): number => {
+      // Use simple frequency response calculation at normalized cutoff/2 (middle of passband)
+      const testFreq = normalizedCutoff / 2;
+      let realSum = 0;
+      let imagSum = 0;
+
+      for (let n = 0; n < coeffs.length; n++) {
+        const angle = -2 * Math.PI * testFreq * n;
+        realSum += coeffs[n] * Math.cos(angle);
+        imagSum += coeffs[n] * Math.sin(angle);
+      }
+
+      return Math.sqrt(realSum * realSum + imagSum * imagSum);
+    };
+
+    // Create rate-adaptive FIR filter
+    const createAdaptiveFIR = (cutoffRatio: number): AudioWorkletNode | ScriptProcessorNode => {
+      const nyquist = sampleRate / 2;
+      const cutoffFreq = nyquist * cutoffRatio;
+      const normalizedCutoff = cutoffFreq / actualContextRate; // Normalize to hardware sample rate
+
+      // Scale filter order LINEARLY with sample rate
+      const baseOrder = 64;
+      const rateScale = sampleRate / 4000; // Linear scaling from 4kHz baseline
+      const filterOrder = Math.max(32, Math.floor(baseOrder * rateScale)); // Minimum 32 taps
+
+      const beta = 8.5; // Kaiser beta for ~100 dB stopband attenuation
+      const firCoeffs: number[] = [];
+
+      // Design Kaiser-windowed sinc FIR filter with CENTERED impulse for zero-phase
+      const center = (filterOrder - 1) / 2;
+
+      for (let n = 0; n < filterOrder; n++) {
+        const x = n - center; // Center impulse at (N-1)/2
+
+        // Sinc function at normalized cutoff
+        let h;
+        if (Math.abs(x) < 1e-10) {
+          h = 2 * normalizedCutoff;
+        } else {
+          const piX = 2 * Math.PI * normalizedCutoff * x;
+          h = Math.sin(piX) / (Math.PI * x);
+        }
+
+        // Apply Kaiser window
+        const w = kaiserWindow(n, filterOrder, beta);
+        firCoeffs.push(h * w);
+      }
+
+      // Normalize to unity gain at DC (initial normalization)
+      const dcSum = firCoeffs.reduce((acc, val) => acc + val, 0);
+      let normalizedCoeffs = firCoeffs.map(c => c / dcSum);
+
+      // FFT-based passband gain check and correction
+      const passbandGain = computePassbandGain(normalizedCoeffs, normalizedCutoff);
+      normalizedCoeffs = normalizedCoeffs.map(c => c / passbandGain);
+
+      // Create FIR filter using ScriptProcessor with DOUBLE-PRECISION convolution
+      const firFilter = ctx.createScriptProcessor(4096, 1, 1);
+      const firBuffer: Float64Array = new Float64Array(filterOrder); // Double precision buffer
+      let bufferIndex = 0;
+
+      firFilter.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const output = e.outputBuffer.getChannelData(0);
+
+        for (let i = 0; i < input.length; i++) {
+          // Add new sample to circular buffer (double precision)
+          firBuffer[bufferIndex] = input[i];
+          bufferIndex = (bufferIndex + 1) % filterOrder;
+
+          // Apply FIR filter with DOUBLE-PRECISION convolution
+          let result = 0.0; // Explicitly double precision
+          for (let j = 0; j < filterOrder; j++) {
+            const bufIdx = (bufferIndex + j) % filterOrder;
+            result += firBuffer[bufIdx] * normalizedCoeffs[j];
+          }
+          output[i] = result;
+        }
+      };
+
+      return firFilter;
+    };
+
+    // Anti-aliasing filter BEFORE downsampling (0.7x Nyquist)
+    const antiAliasFilter = createAdaptiveFIR(0.7);
+
+    // Reconstruction filter AFTER interpolation (0.85x Nyquist)
+    const reconstructionFilter = createAdaptiveFIR(0.85);
 
     const oscillator = ctx.createOscillator();
     oscillator.frequency.value = frequency;
@@ -197,12 +314,11 @@ export default function Visualizer() {
     oscillator.start();
     oscillatorRef.current = oscillator;
 
-    // Chain: oscillator -> anti-alias filter -> crusher (downsample + quantize + hold)
-    //        -> reconstruction filters -> gain -> output
+    // Chain: oscillator -> anti-alias filter -> crusher (downsample + quantize + interpolate)
+    //        -> reconstruction filter -> gain -> output
     antiAliasFilter.connect(crusher);
-    crusher.connect(reconstructionFilter1);
-    reconstructionFilter1.connect(reconstructionFilter2);
-    reconstructionFilter2.connect(gainNode);
+    crusher.connect(reconstructionFilter);
+    reconstructionFilter.connect(gainNode);
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
@@ -222,8 +338,7 @@ export default function Visualizer() {
       try {
         crusher.disconnect();
         antiAliasFilter.disconnect();
-        reconstructionFilter1.disconnect();
-        reconstructionFilter2.disconnect();
+        reconstructionFilter.disconnect();
         gainNode.disconnect();
       } catch (e) {
       }
