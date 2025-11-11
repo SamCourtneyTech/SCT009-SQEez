@@ -16,6 +16,7 @@ export default function Visualizer() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const playbackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -45,24 +46,44 @@ export default function Visualizer() {
 
   // Update gain when play/pause state changes
   useEffect(() => {
+    // Clear any existing timer
+    if (playbackTimerRef.current) {
+      clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = isPlaying ? 0.3 : 0;
     }
+
     // Resume audio context if it's suspended (browser autoplay policy)
     if (isPlaying && audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().catch((err) => {
         console.error('Failed to resume audio context:', err);
       });
     }
+
+    // Set timer to stop playback after 1 second
+    if (isPlaying) {
+      playbackTimerRef.current = setTimeout(() => {
+        setIsPlaying(false);
+      }, 1000);
+    }
+
+    return () => {
+      if (playbackTimerRef.current) {
+        clearTimeout(playbackTimerRef.current);
+        playbackTimerRef.current = null;
+      }
+    };
   }, [isPlaying]);
 
   // Update oscillator waveform type when it changes (requires restart)
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    // Clamp sample rate to valid AudioContext range (3000-768000 Hz) and hardware max
-    // For playback, cap at hardware limit (48kHz) even if visualization uses higher rate
-    const requestedRate = Math.max(3000, Math.min(hardwareMaxRate, sampleRate));
-    const ctx = new AudioContextClass({ sampleRate: requestedRate });
+    // Always create AudioContext at hardware rate for proper downsampling
+    // The crusher will handle resampling to the desired sample rate
+    const ctx = new AudioContextClass();
     audioContextRef.current = ctx;
 
     const actualContextRate = ctx.sampleRate;
@@ -74,12 +95,22 @@ export default function Visualizer() {
 
     let phaseAccumulator = 0;
     const downsampleRatio = actualContextRate / sampleRate;
-    let lastSample = 0;
-    let nextSample = 0;
-    let needNewSample = true;
 
-    // Use linear interpolation only for sine waves
-    const useInterpolation = waveformType === 'sine';
+    // Sinc interpolation parameters
+    const sincRadius = 32; // Number of samples on each side for sinc kernel
+    const sampleBuffer: number[] = []; // Buffer to store quantized samples for sinc interpolation
+
+    // Windowed sinc function (Lanczos window)
+    const sinc = (x: number): number => {
+      if (Math.abs(x) < 1e-10) return 1.0;
+      const piX = Math.PI * x;
+      return Math.sin(piX) / piX;
+    };
+
+    const lanczosWindow = (x: number, a: number): number => {
+      if (Math.abs(x) > a) return 0;
+      return sinc(x / a);
+    };
 
     crusher.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
@@ -94,36 +125,40 @@ export default function Visualizer() {
           if (phaseAccumulator >= downsampleRatio) {
             phaseAccumulator -= downsampleRatio;
 
-            // Quantize the new sample
+            // Quantize the new sample and add to buffer
             const normalized = (input[i] + 1) / 2;
             const quantized = Math.floor(normalized * quantizationLevels);
             const clamped = Math.max(0, Math.min(quantizationLevels - 1, quantized));
-            const newSample = (clamped / (quantizationLevels - 1)) * 2 - 1;
+            const quantizedSample = (clamped / (quantizationLevels - 1)) * 2 - 1;
+            sampleBuffer.push(quantizedSample);
 
-            if (useInterpolation) {
-              // Shift samples: next becomes last, and we capture a new next
-              lastSample = nextSample;
-              nextSample = newSample;
-
-              if (needNewSample) {
-                // First sample - initialize both
-                lastSample = nextSample;
-                needNewSample = false;
-              }
-            } else {
-              // Sample-and-hold for non-sine waves
-              lastSample = newSample;
+            // Keep buffer size manageable
+            if (sampleBuffer.length > sincRadius * 2 + 1) {
+              sampleBuffer.shift();
             }
           }
 
-          if (useInterpolation) {
-            // Linear interpolation between lastSample and nextSample
-            // Phase accumulator tells us how far between samples we are
-            const interpolationFactor = phaseAccumulator / downsampleRatio;
-            output[i] = lastSample + (nextSample - lastSample) * interpolationFactor;
+          // Sinc interpolation
+          if (sampleBuffer.length >= sincRadius * 2 + 1) {
+            // Calculate fractional position within the downsample period
+            const fracPos = phaseAccumulator / downsampleRatio;
+
+            let interpolatedSample = 0;
+            const centerIdx = sampleBuffer.length - sincRadius - 1;
+
+            for (let j = -sincRadius; j <= sincRadius; j++) {
+              const bufferIdx = centerIdx + j;
+              if (bufferIdx >= 0 && bufferIdx < sampleBuffer.length) {
+                const x = j - fracPos;
+                const weight = sinc(x) * lanczosWindow(x, sincRadius);
+                interpolatedSample += sampleBuffer[bufferIdx] * weight;
+              }
+            }
+
+            output[i] = interpolatedSample;
           } else {
-            // Sample-and-hold
-            output[i] = lastSample;
+            // Not enough samples yet, use last available sample
+            output[i] = sampleBuffer.length > 0 ? sampleBuffer[sampleBuffer.length - 1] : 0;
           }
         } else {
           // When sampleRate >= actualContextRate, just quantize without resampling
@@ -135,14 +170,39 @@ export default function Visualizer() {
       }
     };
 
+    // Anti-aliasing filter BEFORE downsampling to prevent aliasing
+    const nyquist = sampleRate / 2;
+    const antiAliasFilter = ctx.createBiquadFilter();
+    antiAliasFilter.type = 'lowpass';
+    antiAliasFilter.frequency.value = nyquist * 0.8; // Conservative cutoff at 80% of Nyquist
+    antiAliasFilter.Q.value = 0.707; // Butterworth response
+
+    // Reconstruction filter AFTER sample-and-hold to remove imaging artifacts
+    // This is critical - the stepped output from sample-and-hold creates images
+    // that need to be filtered out before we hear them
+    const reconstructionFilter1 = ctx.createBiquadFilter();
+    reconstructionFilter1.type = 'lowpass';
+    reconstructionFilter1.frequency.value = nyquist * 0.9;
+    reconstructionFilter1.Q.value = 0.5412; // 4th-order Butterworth Q1
+
+    const reconstructionFilter2 = ctx.createBiquadFilter();
+    reconstructionFilter2.type = 'lowpass';
+    reconstructionFilter2.frequency.value = nyquist * 0.9;
+    reconstructionFilter2.Q.value = 1.3065; // 4th-order Butterworth Q2
+
     const oscillator = ctx.createOscillator();
     oscillator.frequency.value = frequency;
     oscillator.type = waveformType;
-    oscillator.connect(crusher);
+    oscillator.connect(antiAliasFilter);
     oscillator.start();
     oscillatorRef.current = oscillator;
 
-    crusher.connect(gainNode);
+    // Chain: oscillator -> anti-alias filter -> crusher (downsample + quantize + hold)
+    //        -> reconstruction filters -> gain -> output
+    antiAliasFilter.connect(crusher);
+    crusher.connect(reconstructionFilter1);
+    reconstructionFilter1.connect(reconstructionFilter2);
+    reconstructionFilter2.connect(gainNode);
     gainNode.connect(ctx.destination);
     gainNodeRef.current = gainNode;
 
@@ -161,6 +221,9 @@ export default function Visualizer() {
 
       try {
         crusher.disconnect();
+        antiAliasFilter.disconnect();
+        reconstructionFilter1.disconnect();
+        reconstructionFilter2.disconnect();
         gainNode.disconnect();
       } catch (e) {
       }
